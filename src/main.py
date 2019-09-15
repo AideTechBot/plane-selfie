@@ -1,8 +1,14 @@
-#from motorcontrol import aim_at
+from motorcontrol import aim_at
+from ADSBdecode import *
+from ADSB import *
+import threading
+from sbs1decoder import SBSMessage
 from math import *
 from geopy.distance import great_circle
 from helper import *
 import socket
+import time
+import heapq
 import sys
 
 #constants
@@ -66,45 +72,90 @@ def calcAZ(north,station,plane):
 	#return theta
 	return degrees(acos(numerator/denominator))
 	
+planeDict = {}
 def main():
-	'''
-	HOUSE = (47, 47)
-	PLANE = [(48, 47),10.0]
-	distance = great_circle(HOUSE,PLANE[0]).km
-	prin calcEL(distance,PLANE[1])
-	print calcAZ((90.0,0.0),(HOUSE[0], HOUSE[1]), (PLANE[0][0], PLANE[0][1]))
-	'''
-	#try initiating the socket
-	try:
-		cli = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		cli.connect(('localhost',30002))
-	except:
-		print("Something went wrong when creating the socket.")
-		sys.exit(1)
+    '''
+    HOUSE = (47, 47)
+    PLANE = [(48, 47),10.0]
+    distance = great_circle(HOUSE,PLANE[0]).km
+    prin calcEL(distance,PLANE[1])
+    print calcAZ((90.0,0.0),(HOUSE[0], HOUSE[1]), (PLANE[0][0], PLANE[0][1]))
+    '''
+    #try initiating the socket
+    try:
+        cli = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        cli.connect(('localhost',30003))
+    except:
+        print("Something went wrong when creating the socket.")
+        sys.exit(1)
 
-	while(1):
-		#catch the data
-		data = ""
-		try:
-			data = cli.recv(1024)
-		except:
-			print("Connection closed unexpectantly")
-			sys.exit(1)
-		data = data.replace(";","").replace("*","")
-		print(data)
-		if "\n" in data:
-			data = data.split("\n")
-			data = filter(None, data)
-			pos = []
-			if len(data) > 1:
-				for msg in data:
-					print(msg)
-					binary = hex2bin(msg)
-					print(len(binary))
-					if len(binary) == 112:
-						print(decodecallsign(msg))
-					pos = pos.append(msg)
-					print(pos)
+    while(1):
+        #catch the data
+        data = ""
+        try:
+            data = cli.recv(1024).decode('utf-8')
+        except:
+            print("Connection closed unexpectantly")
+            sys.exit(1)
+        #print(data)
+        if "\n" in data:
+            data = data.split("\n")
+            data = filter(None, data)
+            for msg in data:
+                sbsmsg = SBSMessage(msg)
+#                print(sbsmsg.Longitude, sbsmsg.Latitude)
+                if(sbsmsg.TransmissionType == 3 and sbsmsg.Longitude.strip()
+                    != "" and sbsmsg.Latitude.strip() != "" and
+                    sbsmsg.PressureAltitude.strip() != ""):
+                    if(sbsmsg.HexID not in planeDict):
+                        planeDict[sbsmsg.HexID] = [ sbsmsg ]
+                    else:
+                        planeDict[sbsmsg.HexID].insert(0, sbsmsg)
+
+def get_lock():
+    if(len(planeDict.keys()) == 0):
+        return "No planes"
+    planeICAO, msgHistory = max(planeDict.items(), key = lambda x: len(set(x[1])))
+    if(time.time() - msgHistory[0].Timestamp > 30.0):
+        del planeDict[planeICAO]
+        return get_lock()
+    else:
+        return planeICAO
+        
+
+def footToKM(foot):
+    return foot * 0.0003048
+
+def update():
+    print("Starting locking mechanism...")
+    while(1):
+        lockedPlane = get_lock()
+        if(lockedPlane != "No planes"):
+            print(f"Locked on: {lockedPlane}")
+            lockedPlane = planeDict[lockedPlane][0]
+            time.sleep(1)
+
+            HOUSE = (43.473513, -80.539802)
+            NORTH = (90.0, 0.0)
+            PLANE = (float(lockedPlane.Latitude), float(lockedPlane.Longitude))
+            PLANE_ALT = footToKM(float(lockedPlane.PressureAltitude))
+            distance = great_circle(HOUSE,PLANE).km
+            el = calcEL(distance, PLANE_ALT)
+            az = calcAZ(NORTH, HOUSE, PLANE)
+
+            print(az,el)
+            #aim_at(az,el)
+            aim_at(0,0)
 
 if __name__ == '__main__':
-	main()
+    try:
+        thread1 = threading.Thread(target=main)
+        thread2 = threading.Thread(target=update)
+        thread1.start()
+        thread2.start()
+    except KeyboardInterrupt:
+        pass
+    thread1.join()
+    thread2.join()
+
+    print("Quitting")

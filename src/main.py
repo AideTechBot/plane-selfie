@@ -9,6 +9,7 @@ from helper import *
 import socket
 import time
 import heapq
+import os
 import sys
 
 #constants
@@ -145,6 +146,8 @@ def update():
 
             print(az,el)
             aim_at(az,el)
+            sleep(2)
+            os.system("raspistill -o out.jpg -vf -hf")
 
 if __name__ == '__main__':
     try:

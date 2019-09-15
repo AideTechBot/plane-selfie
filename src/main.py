@@ -70,7 +70,7 @@ def calcAZ(north,station,plane):
 	denominator = norm(BA) * norm(BC)
 	
 	#return theta
-	return degrees(acos(numerator/denominator))
+	return 360.0 + (degrees(acos(numerator/denominator)) - 180.0)
 	
 planeDict = {}
 def main():
@@ -144,8 +144,7 @@ def update():
             az = calcAZ(NORTH, HOUSE, PLANE)
 
             print(az,el)
-            #aim_at(az,el)
-            aim_at(0,0)
+            aim_at(az,el)
 
 if __name__ == '__main__':
     try:

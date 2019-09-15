@@ -1,0 +1,20 @@
+" set UTF-8 encoding
+set enc=utf-8
+set fenc=utf-8
+set termencoding=utf-8
+" disable vi compatibility (emulation of old bugs)
+set nocompatible
+" use indentation of previous line
+set autoindent
+" configure tabwidth and insert spaces instead of tabs
+" wrap lines at 120 chars. 80 is somewaht antiquated with nowadays displays.
+set textwidth=80
+" highlight matching braces
+set showmatch
+
+" in normal mode F2 will save the file
+nmap <F2> :w<CR>
+" in insert mode F2 will exit insert, save, enters insert again
+imap <F2> <ESC>:w<CR>i
+" goto definition with F5
+map <F5> :!rsync -aP . pi@192.168.43.182:/home/pi/htn-plane-selfie<CR>
